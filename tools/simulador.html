@@ -1,0 +1,71 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>DungeonMess: simulador</title>
+  <style>
+    :root { color-scheme: dark; }
+    body { margin: 0; padding: 24px; background: #110e17; color: #e9dfc8; font: 15px/1.45 system-ui, sans-serif; }
+    h1 { margin: 0 0 4px; font-size: 1.6rem; }
+    p { color: #bdb29c; max-width: 70ch; }
+    form { display: flex; flex-wrap: wrap; gap: 12px; align-items: end; margin: 16px 0; }
+    label { display: grid; gap: 4px; color: #bdb29c; font-size: 0.9rem; }
+    input { width: 110px; padding: 6px 8px; background: #241f2d; color: #e9dfc8; border: 1px solid #463d50; border-radius: 6px; font: inherit; }
+    button { padding: 8px 16px; background: #f4b860; color: #24170a; border: 0; border-radius: 6px; font: 700 15px system-ui, sans-serif; cursor: pointer; }
+    button:disabled { opacity: 0.5; cursor: wait; }
+    table { border-collapse: collapse; width: 100%; font-variant-numeric: tabular-nums; }
+    th, td { padding: 6px 10px; border-bottom: 1px solid #302939; text-align: right; white-space: nowrap; }
+    th { color: #8d8374; font-weight: 600; position: sticky; top: 0; background: #110e17; }
+    td.l, th.l { text-align: left; white-space: normal; }
+    .wrap { overflow-x: auto; }
+  </style>
+</head>
+<body>
+  <h1>Simulador de equilibrio</h1>
+  <p>Juega partidas seguidas con el piloto automático (que también compra en el mercado), gasta las almas en la mejora más barata disponible y anota hasta dónde llega cada partida. Sirve para ver el ritmo de progresión después de tocar los valores de <code>js/data.js</code>.</p>
+  <form id="f">
+    <label>Partidas <input id="runs" type="number" min="1" max="200" value="25"></label>
+    <label>Semilla <input id="seed" type="number" value="1000"></label>
+    <button id="go" type="submit">Simular campaña</button>
+  </form>
+  <div class="wrap">
+    <table>
+      <thead><tr><th>#</th><th>Piso inicial</th><th>Piso final</th><th>Nivel</th><th>Tiempo</th><th>Bajas</th><th>Almas</th><th>Oro</th><th class="l">Mercado</th><th>Árbol</th><th>Récord</th><th class="l">Último golpe</th><th class="l">Armas</th></tr></thead>
+      <tbody id="out"></tbody>
+    </table>
+  </div>
+  <script src="../js/data.js"></script>
+  <script src="../js/dungeon.js"></script>
+  <script src="../js/game.js"></script>
+  <script src="sim.js"></script>
+  <script>
+    (function () {
+      const G = window.G, out = document.getElementById('out'), go = document.getElementById('go');
+      document.getElementById('f').addEventListener('submit', e => {
+        e.preventDefault();
+        out.innerHTML = ''; go.disabled = true;
+        const n = +document.getElementById('runs').value, seed = +document.getElementById('seed').value;
+        const meta = G.emptyMeta();
+        let i = 0;
+        const next = () => {
+          if (i >= n) { go.disabled = false; return; }
+          const opts = G.startFloorOptions(meta);
+          const r = G.simulateRun(meta, { seed: seed + i * 7919, startFloor: opts[opts.length - 1] });
+          const bought = G.buyGreedy(meta, ['f7']).length;
+          const tr = document.createElement('tr');
+          const m = Math.floor(r.time / 60), s = r.time % 60;
+          const NAMES = { weapon: 'armas', relic: 'reliquias', tome: 'pergaminos', companion: 'compañeros', potion: 'pociones', heal: 'bendiciones' };
+          const shop = Object.entries(r.bought).map(([k, v]) => `${v} ${NAMES[k] || k}`).join(', ') || '—';
+          const cells = [i + 1, r.startFloor, r.floor, r.lvl, `${m}:${String(s).padStart(2, '0')}`, r.kills, '+' + G.fmt(r.souls), G.fmt(r.gold), shop, '+' + bought, meta.bestFloor, r.killedBy || (r.stuck ? 'atasco' : '—'), r.weapons.join(' + ')];
+          cells.forEach((c, k) => { const td = document.createElement('td'); td.textContent = c; if (k === 8 || k >= 11) td.className = 'l'; tr.append(td); });
+          out.append(tr);
+          i++;
+          setTimeout(next, 0);
+        };
+        next();
+      });
+    })();
+  </script>
+</body>
+</html>

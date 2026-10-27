@@ -1,0 +1,219 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+  <title>DungeonMess</title>
+  <meta name="description" content="Roguelike incremental de mazmorras: armas a una y a dos manos, árbol de habilidades y enemigos cada vez más fuertes.">
+  <meta name="theme-color" content="#110e17">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%23110e17'/%3E%3Cpath d='M6 8h6v6h6v6h6v6H6z' fill='%23f4b860'/%3E%3C/svg%3E">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Alegreya+Sans:wght@400;500;700;800&family=Grenze+Gotisch:wght@500;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <canvas id="game" aria-label="Mazmorra"></canvas>
+  <div id="touch-zone"></div>
+  <div id="joystick" hidden><div class="knob"></div></div>
+
+  <!-- ===================== HUD ===================== -->
+  <div id="hud" hidden>
+    <div class="hud-tl">
+      <div class="lvl" title="Nivel"><span class="lvl-label">Nv</span><span id="hud-lvl">1</span></div>
+      <div class="bars">
+        <div class="hp"><div class="fill" id="hp-fill"></div><span id="hp-text">100 / 100</span></div>
+        <div class="xp"><div class="fill" id="xp-fill"></div></div>
+        <div id="party" aria-label="Compañeros y reliquias"></div>
+      </div>
+    </div>
+
+    <div class="hud-tr">
+      <div class="floor-box">
+        <div class="floor" id="hud-floor">Piso 1</div>
+        <div class="threat" id="hud-threat">Amenaza ×1</div>
+      </div>
+      <div class="counters">
+        <span class="gold">Oro <b id="hud-gold">0</b></span>
+        <span>Almas <b id="hud-souls">0</b></span>
+        <span>Bajas <b id="hud-kills">0</b></span>
+      </div>
+      <canvas id="minimap" width="168" height="112" aria-hidden="true"></canvas>
+      <div class="hud-buttons">
+        <button id="btn-auto" class="chip" hidden aria-pressed="false" title="Piloto automático (T)">Auto</button>
+        <button id="btn-pause" class="chip" title="Pausa (Esc)">Pausa</button>
+      </div>
+    </div>
+
+    <div id="boss-bar" hidden>
+      <div class="boss-name" id="boss-name"></div>
+      <div class="bar"><div class="fill" id="boss-fill"></div></div>
+    </div>
+
+    <div id="toast" aria-live="polite"></div>
+
+    <div class="hud-bottom">
+      <div id="pickup" hidden></div>
+      <button id="btn-stairs" class="primary" hidden></button>
+      <div class="hud-row">
+        <div id="hands"></div>
+        <button id="btn-potion" class="potion-slot" title="Beber poción (R)">
+          <canvas width="64" height="64" aria-hidden="true"></canvas>
+          <span class="p-count" id="potion-count">1/2</span>
+          <kbd class="desktop-only">R</kbd>
+        </button>
+      </div>
+    </div>
+
+    <button id="btn-dash" class="touch-only" aria-label="Rodar">Rodar</button>
+  </div>
+
+  <!-- ===================== Portada ===================== -->
+  <section id="title" class="screen">
+    <div class="title-inner">
+      <h1>DungeonMess</h1>
+      <p class="tagline">Cada caída te deja almas. Cada alma te lleva más hondo.</p>
+      <dl class="title-stats">
+        <div><dt>Récord</dt><dd id="t-best">—</dd></div>
+        <div><dt>Almas</dt><dd id="t-souls">0</dd></div>
+        <div><dt>Partidas</dt><dd id="t-runs">0</dd></div>
+      </dl>
+      <div class="start-floor" id="t-startfloor" hidden>
+        <span>Empezar en el piso</span>
+        <button id="sf-minus" aria-label="Piso anterior">−</button>
+        <output id="sf-val">1</output>
+        <button id="sf-plus" aria-label="Piso siguiente">+</button>
+      </div>
+      <div class="title-actions">
+        <button id="btn-start" class="primary big">Descender</button>
+        <button id="btn-tree">Árbol de habilidades</button>
+        <button id="btn-help" class="ghost">Cómo se juega</button>
+      </div>
+    </div>
+    <p class="version" id="version"></p>
+  </section>
+
+  <!-- ===================== Árbol de habilidades ===================== -->
+  <section id="tree" class="screen" hidden>
+    <header class="tree-head">
+      <h2>Árbol de habilidades</h2>
+      <div class="tree-souls">Almas <b id="tr-souls">0</b></div>
+      <button id="tr-close">Volver</button>
+    </header>
+    <div id="tree-view">
+      <div id="tree-world">
+        <svg id="tree-lines" width="1" height="1" aria-hidden="true"></svg>
+      </div>
+    </div>
+    <div class="tree-zoom">
+      <button id="tz-in" aria-label="Acercar">+</button>
+      <button id="tz-out" aria-label="Alejar">−</button>
+      <button id="tz-fit">Centrar</button>
+    </div>
+    <aside id="tree-detail" aria-live="polite"></aside>
+  </section>
+
+  <!-- ===================== Subida de nivel ===================== -->
+  <section id="levelup" class="modal" hidden>
+    <div class="panel">
+      <h2 id="lu-title">Nivel 2</h2>
+      <p class="sub">Elige una mejora para esta partida</p>
+      <div id="lu-cards" class="cards"></div>
+      <button id="lu-auto" class="ghost">Elegir por mí</button>
+    </div>
+  </section>
+
+  <!-- ===================== Pausa ===================== -->
+  <section id="pause" class="modal" hidden>
+    <div class="panel pause-panel">
+      <div class="pause-main">
+        <h2>Pausa</h2>
+        <div class="stack">
+          <button id="p-resume" class="primary">Continuar</button>
+          <label class="toggle"><input type="checkbox" id="p-sound"> Sonido</label>
+          <label class="toggle" id="p-autoboons-row" hidden><input type="checkbox" id="p-autoboons"> Elegir mejoras solo con el piloto automático</label>
+          <button id="p-help">Cómo se juega</button>
+          <button id="p-quit" class="danger">Abandonar la partida</button>
+          <p class="note">Si abandonas conservas las almas reunidas.</p>
+        </div>
+      </div>
+      <div class="pause-inv" id="p-inv" aria-label="Esta partida"></div>
+    </div>
+  </section>
+
+  <!-- ===================== Muerte ===================== -->
+  <section id="death" class="modal" hidden>
+    <div class="panel">
+      <h2 id="d-title">Caíste en el piso 1</h2>
+      <p class="sub" id="d-sub"></p>
+      <dl class="death-stats" id="d-stats"></dl>
+      <div class="actions">
+        <button id="d-again" class="primary">Descender otra vez</button>
+        <button id="d-tree">Árbol de habilidades</button>
+        <button id="d-title-btn" class="ghost">Portada</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===================== Ayuda ===================== -->
+  <section id="help" class="modal" hidden>
+    <div class="panel wide">
+      <h2>Cómo se juega</h2>
+      <div class="help-grid">
+        <div>
+          <h3>Controles</h3>
+          <ul>
+            <li><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> o flechas para moverte. En móvil, arrastra en la mitad izquierda.</li>
+            <li>Tus armas atacan solas al enemigo más cercano que esté a su alcance.</li>
+            <li><kbd>Espacio</kbd> para rodar: eres invulnerable un instante.</li>
+            <li><kbd>Q</kbd> y <kbd>E</kbd> equipan el arma del suelo en la mano izquierda o derecha. <kbd>X</kbd> la funde en oro.</li>
+            <li><kbd>R</kbd> bebe una poción del cinturón.</li>
+            <li><kbd>F</kbd> baja por las escaleras. <kbd>Esc</kbd> pausa.</li>
+          </ul>
+        </div>
+        <div>
+          <h3>Armas y manos</h3>
+          <ul>
+            <li>Las armas de una mano pueden llevarse de dos en dos; cada una ataca a su ritmo.</li>
+            <li>Las de dos manos ocupan ambas y pegan más fuerte.</li>
+            <li>El escudo va en una mano: bloquea golpes y da armadura.</li>
+            <li>Las rarezas son común, rara, épica y legendaria. Las épicas y legendarias traen efectos extra.</li>
+          </ul>
+        </div>
+        <div>
+          <h3>La mazmorra</h3>
+          <ul>
+            <li>Cada piso los enemigos tienen más vida y pegan más fuerte.</li>
+            <li>Cada cinco pisos hay un jefe que cierra las escaleras.</li>
+            <li>Los enemigos marcan en rojo su ataque antes de golpear: apártate o rueda.</li>
+          </ul>
+        </div>
+        <div>
+          <h3>Oro y mercado</h3>
+          <ul>
+            <li>Los enemigos sueltan monedas, los cofres van llenos y cualquier arma del suelo se puede fundir en oro.</li>
+            <li>Después de los pisos 2, 5, 7, 10… hay un mercado: armas, reliquias pasivas, pergaminos de mejora, compañeros y pociones.</li>
+            <li>El mercader renueva las mesas a cambio de oro. El oro se pierde al caer: gástalo.</li>
+          </ul>
+        </div>
+        <div>
+          <h3>Progresión</h3>
+          <ul>
+            <li>Al subir de nivel eliges una mejora que dura la partida.</li>
+            <li>Al caer conservas las almas: gástalas en el árbol de habilidades.</li>
+            <li>Atajo te deja empezar más abajo; Piloto automático juega por ti.</li>
+          </ul>
+        </div>
+      </div>
+      <button id="h-close" class="primary">Entendido</button>
+    </div>
+  </section>
+
+  <script src="js/data.js"></script>
+  <script src="js/dungeon.js"></script>
+  <script src="js/game.js"></script>
+  <script src="js/render.js"></script>
+  <script src="js/audio.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>
