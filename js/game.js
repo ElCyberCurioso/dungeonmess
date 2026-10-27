@@ -11,7 +11,7 @@
   /* =================== Progresión persistente =================== */
   G.emptyMeta = () => ({
     v: 1, souls: 0, totalSouls: 0, bestFloor: 0, runs: 0, kills: 0, skills: {},
-    settings: { sound: true, auto: true, autoBoons: true, startFloor: 1 },
+    settings: { sound: true, auto: true, autoBoons: true, startFloor: 1, autoAttack: false },
   });
   G.loadMeta = function () {
     try {
@@ -272,16 +272,17 @@
       t: 0, time: 0, floorTime: 0, floor: 1, startFloor: Math.max(1, opts.startFloor || 1), maxFloor: 0,
       kills: 0, souls: 0, enemies: [], proj: [], eproj: [], items: [], fx: [], parts: [], texts: [], events: [],
       pendingLevels: 0, choices: null, over: false, paused: false, shake: 0,
-      autopilot: !!opts.autopilot, input: { mx: 0, my: 0, dash: false },
+      autopilot: !!opts.autopilot, manual: !!opts.manual,
+      input: { mx: 0, my: 0, dash: false, fire: { L: false, R: false }, aimX: 0, aimY: 0, mouse: false, assist: false },
       near: null, onStairs: false, boss: null, stairsLocked: false, stats: null,
       gold: 0, goldEarned: 0, goldPop: 0, goldPopT: 0, companions: [], shop: false, shopVisits: 0,
-      rerolls: 0, tomesBought: 0, purchases: [], compDamage: 0, goldSrc: {},
+      rerolls: 0, tomesBought: 0, purchases: [], compDamage: 0, goldSrc: {}, pack: null, packsBought: 0,
     };
     const p = s.player = {
       x: 0, y: 0, r: 0.3, hp: 1, lvl: 1, xp: 0, xpNext: G.xpFor(1), boons: {},
       hands: { L: null, R: null }, cd: { L: 0, R: 0.25, B: 0 }, anim: { L: 0, R: 0, B: 0 }, aim: { L: 0, R: 0, B: 0 },
       facing: 0, atkT: 0, dashT: 0, dashCd: 0, ddx: 1, ddy: 0, dx: 1, dy: 0, iframes: 0, hurtT: 0,
-      revives: [], moving: false, walkT: 0, potions: 0, relics: {},
+      revives: [], moving: false, walkT: 0, potions: 0, relics: {}, guard: false, aimAng: 0,
     };
     const v6 = G.lvl(meta, 'v6');
     if (v6) p.revives.push(v6 === 1 ? 0.3 : 0.5);
@@ -406,8 +407,63 @@
       it.comp = owned.length && rng() < 0.5 ? rng.pick(owned) : rng.pick(G.COMPANION_IDS);
     } else if (cat === 'potion') it.stock = G.SHOP.potionStock;
     else if (cat === 'heal') it.stock = 1;
+    else if (cat === 'pack') it.stock = G.SHOP.packStock;
     return it;
   }
+
+  /* ---------- Paquete sorpresa: tres objetos de categorías distintas, te quedas uno ---------- */
+  function makePackOptions(s) {
+    const rng = s.rng, p = s.player;
+    const shown = s.items.filter(o => o.kind === 'shop' && o.cat === 'relic' && !o.sold).map(o => o.relic);
+    const relicPool = G.RELICS.filter(r => !p.relics[r.id] && !shown.includes(r.id));
+    const boonPool = G.BOONS.filter(b => (p.boons[b.id] || 0) < b.max);
+    const cats = ['weapon', 'companion'];
+    if (relicPool.length) cats.push('relic');
+    if (boonPool.length) cats.push('tome');
+    for (let i = cats.length - 1; i > 0; i--) { const j = Math.floor(rng() * (i + 1)); [cats[i], cats[j]] = [cats[j], cats[i]]; }
+    const out = cats.slice(0, 3).map(cat => {
+      if (cat === 'weapon') return { cat, w: G.makeWeapon(s, G.randomWeaponId(rng), s.floor, Math.max(2, G.rollRarity(s, 3))) };
+      if (cat === 'relic') return { cat, relic: rng.pick(relicPool).id };
+      if (cat === 'tome') return { cat, boon: rng.pick(boonPool).id };
+      return { cat, comp: rng.pick(G.COMPANION_IDS) };
+    });
+    // Si faltan categorías, completa con armas distintas
+    while (out.length < 3) out.push({ cat: 'weapon', w: G.makeWeapon(s, G.randomWeaponId(rng), s.floor, Math.max(2, G.rollRarity(s, 3))) });
+    return out;
+  }
+  G.choosePack = function (s, i) {
+    if (!s.pack || !s.pack.options[i]) return false;
+    const o = s.pack.options[i], p = s.player;
+    switch (o.cat) {
+      case 'weapon': dropWeapon(s, o.w); break;   // queda a tus pies para elegir mano
+      case 'relic': p.relics[o.relic] = true; computeStats(s); break;
+      case 'tome':
+        p.boons[o.boon] = (p.boons[o.boon] || 0) + 1;
+        if (o.boon === 'fenix') p.revives.push(0.4);
+        computeStats(s);
+        if (o.boon === 'robustez') p.hp = Math.min(s.stats.maxHp, p.hp + s.stats.maxHp * 0.3);
+        break;
+      case 'companion': addCompanion(s, o.comp); break;
+    }
+    s.pack = null;
+    s.purchases.push('pack-' + o.cat);
+    s.events.push({ type: 'packpick', cat: o.cat });
+    return true;
+  };
+  function autoPackPick(s) {
+    const opts = s.pack.options;
+    let best = 0, bs = -1;
+    opts.forEach((o, i) => {
+      let sc = 0;
+      if (o.cat === 'companion') sc = ownComp(s, o.comp) ? 60 : s.companions.length < s.stats.compSlots ? 85 : 10;
+      else if (o.cat === 'relic') sc = 70;
+      else if (o.cat === 'weapon') sc = G.bestSlotFor(s, o.w) ? 65 : 5;
+      else if (o.cat === 'tome') sc = 45;
+      if (sc > bs) { bs = sc; best = i; }
+    });
+    return best;
+  }
+  G.autoPackPick = autoPackPick;
   /* Oro por enemigo: crece con la economía pero se reparte entre más enemigos en pisos hondos. */
   G.goldDensity = f => 1 / (1 + 0.15 * (f - 1));
   G.goldPerEnemy = f => G.econ(f) * G.goldDensity(f);
@@ -428,6 +484,7 @@
       }
       case 'potion': base = G.SHOP.potion * e; break;
       case 'heal': base = G.SHOP.heal * e; break;
+      case 'pack': base = G.SHOP.pack * e * (1 + G.SHOP.packGrowth * s.packsBought); break;
       case 'reroll': base = G.SHOP.reroll * e * (1 + 0.5 * s.rerolls); break;
     }
     return Math.max(1, Math.round(base * (1 - s.stats.discount)));
@@ -463,6 +520,11 @@
       case 'companion': addCompanion(s, it.comp); it.sold = true; break;
       case 'potion': p.potions++; if (--it.stock <= 0) it.sold = true; break;
       case 'heal': p.hp = s.stats.maxHp; if (--it.stock <= 0) it.sold = true; break;
+      case 'pack':
+        if (--it.stock <= 0) it.sold = true;
+        s.packsBought++;
+        s.pack = { options: makePackOptions(s), item: it.id };
+        break;
     }
     s.purchases.push(it.cat);
     s.events.push({ type: 'buy', cat: it.cat });
@@ -614,6 +676,11 @@
       G.chooseBoon(s, autoBoonPick(s));
       if (s.choices) return;
     }
+    if (s.pack) {
+      const auto = s.sim || s.attract || (s.autopilot && s.meta.settings.autoBoons);
+      if (!auto) return;
+      G.choosePack(s, autoPackPick(s));
+    }
     s.t += dt; s.time += dt; s.floorTime += dt;
     s.shake = Math.max(0, s.shake - dt * 1.6);
     const p = s.player, m = s.map;
@@ -639,9 +706,15 @@
     }
     let vx, vy;
     if (p.dashT > 0) { p.dashT -= dt; vx = p.ddx * 11; vy = p.ddy * 11; if (!s.sim && Math.random() < 0.6) particle(s, p.x, p.y, 0, 0, '#5fae9c', 0.25, 0.08); }
-    else { vx = mx * st.move; vy = my * st.move; }
+    else { const slow = p.guard ? 0.55 : 1; vx = mx * st.move * slow; vy = my * st.move * slow; }
     p.moving = vx * vx + vy * vy > 0.04;
-    if (p.moving) { p.walkT += dt; if (p.atkT <= 0) p.facing = turnTo(p.facing, Math.atan2(vy, vx), dt * 14); }
+    const manual = s.manual && !s.autopilot;
+    if (manual && s.input.mouse) {
+      // Con ratón el héroe siempre mira al puntero
+      p.aimAng = Math.atan2(s.input.aimY - p.y, s.input.aimX - p.x);
+      p.facing = turnTo(p.facing, p.aimAng, dt * 20);
+      if (p.moving) p.walkT += dt;
+    } else if (p.moving) { p.walkT += dt; if (p.atkT <= 0 && !p.guard) p.facing = turnTo(p.facing, Math.atan2(vy, vx), dt * 14); }
     moveCircle(m, p, vx * dt, vy * dt);
 
     if (st.regen > 0 && p.hp < st.maxHp) p.hp = Math.min(st.maxHp, p.hp + st.regen * st.maxHp * dt);
@@ -653,7 +726,7 @@
     s.flowT -= dt;
     if (ti !== s.flowTile || s.flowT <= 0) { G.bfsField(m, Math.floor(p.x), Math.floor(p.y), 0, s.flow); s.flowTile = ti; s.flowT = 0.5; }
 
-    playerAttacks(s, dt);
+    if (manual) manualAttacks(s, dt); else { p.guard = false; playerAttacks(s, dt); }
     updateCompanions(s, dt);
     updateEnemies(s, dt);
     if (s.over) return;
@@ -751,7 +824,8 @@
       const reach = effRange(s, w);
       const t = findTarget(s, reach);
       if (!t) { p.cd[k] = 0; continue; }
-      if (w.kind === 'melee') meleeAttack(s, k, w, t, reach); else rangedAttack(s, k, w, t);
+      if (w.kind === 'melee') meleeAttack(s, k, w, Math.atan2(t.y - p.y, t.x - p.x), reach, t);
+      else rangedAttack(s, k, w, leadAngle(s, w, t));
       p.cd[k] = w.cd;
       p.atkT = 0.5;
       if (slots.length === 2 && st.tempest > 0) {
@@ -760,9 +834,54 @@
       }
     }
   }
-  function meleeAttack(s, k, w, t, reach) {
+  /* ---------- Ataque manual ----------
+     Cada botón controla su mano (clic izquierdo → mano izquierda, derecho → derecha).
+     Un arma a dos manos responde a cualquiera de los dos. Mano vacía: puñetazo.
+     El botón de la mano con escudo te cubre mientras lo mantienes. */
+  G.handWeapon = function (p, k) {
+    const L = p.hands.L, R = p.hands.R;
+    if (L && L === R) return ['B', L];
+    const w = p.hands[k];
+    if (w && w.kind === 'shield') return [k, w];
+    return [k, w || G.FISTS];
+  };
+  function manualAttacks(s, dt) {
+    const p = s.player, st = s.stats, inp = s.input;
+    p.anim.L -= dt; p.anim.R -= dt; p.anim.B -= dt;
+    for (const k of ['L', 'R', 'B']) p.cd[k] = Math.max(0, p.cd[k] - dt * st.atkSpd);
+    p.guard = false;
+    const L = p.hands.L, R = p.hands.R, dual = !!(L && R && L !== R && L.kind !== 'shield' && R.kind !== 'shield');
+    for (const k of ['L', 'R']) {
+      if (!inp.fire[k] || p.dashT > 0) continue;
+      const [slot, w] = G.handWeapon(p, k);
+      if (w.kind === 'shield') { p.guard = true; continue; }
+      if (p.cd[slot] > 0) continue;
+      const reach = effRange(s, w);
+      let dir;
+      if (inp.assist) {
+        // Pantalla táctil: apunta al enemigo más cercano a tiro; si no hay, hacia donde miras
+        const t = findTarget(s, reach + 1.5);
+        dir = t ? (w.kind === 'melee' ? Math.atan2(t.y - p.y, t.x - p.x) : leadAngle(s, w, t)) : p.facing;
+      } else dir = Math.atan2(inp.aimY - p.y, inp.aimX - p.x);
+      if (w.kind === 'melee') meleeAttack(s, slot, w, dir, reach, null); else rangedAttack(s, slot, w, dir);
+      p.cd[slot] = w.cd; p.atkT = 0.5; p.aimAng = dir;
+      if (dual && st.tempest > 0) { const other = k === 'L' ? 'R' : 'L'; p.cd[other] = Math.max(0, p.cd[other] - st.tempest); }
+    }
+    if (p.guard && inp.assist) {
+      const t = findTarget(s, 6);
+      if (t) p.aimAng = Math.atan2(t.y - p.y, t.x - p.x); else p.aimAng = p.facing;
+      p.facing = turnTo(p.facing, p.aimAng, dt * 20);
+    }
+  }
+
+  /* Ángulo de disparo adelantando al objetivo según su velocidad. */
+  function leadAngle(s, w, t) {
+    const p = s.player, spd = w.pspeed * s.stats.pspeed;
+    const lead = Math.min(0.6, Math.hypot(t.x - p.x, t.y - p.y) / spd);
+    return Math.atan2(t.y + t.vy * lead - p.y, t.x + t.vx * lead - p.x);
+  }
+  function meleeAttack(s, k, w, dir, reach, t) {
     const p = s.player, st = s.stats;
-    const dir = Math.atan2(t.y - p.y, t.x - p.x);
     const whirl = st.whirl > 0 && s.rng() < st.whirl;
     const half = whirl ? Math.PI : (w.arc * Math.PI / 360);
     for (const e of s.enemies) {
@@ -777,11 +896,9 @@
     if (!s.sim) s.fx.push({ type: 'swing', x: p.x, y: p.y, dir, half, reach, t: 0, dur: 0.18, color: G.RARITIES[w.rarity || 0].color, thrust: w.arc <= 40, whirl });
     s.events.push({ type: 'swing', heavy: w.hands === 2 });
   }
-  function rangedAttack(s, k, w, t) {
+  function rangedAttack(s, k, w, dir) {
     const p = s.player, st = s.stats;
     const spd = w.pspeed * st.pspeed;
-    const lead = Math.min(0.6, Math.hypot(t.x - p.x, t.y - p.y) / spd);
-    const dir = Math.atan2(t.y + t.vy * lead - p.y, t.x + t.vx * lead - p.x);
     let shots = w.shots || 1;
     if (st.extraShot > 0 && s.rng() < st.extraShot) shots++;
     const spread = (w.spread || 9) * Math.PI / 180;
@@ -1133,12 +1250,15 @@
   }
 
   /* =================== Daño al jugador =================== */
-  function damagePlayer(s, amount, src, melee) {
+  function damagePlayer(s, amount, src, melee, from) {
     const p = s.player, st = s.stats;
     if (s.over || p.iframes > 0 || p.dashT > 0) return;
     if (st.dodge > 0 && s.rng() < st.dodge) { addText(s, p.x, p.y - 0.55, 'Esquiva', 'info'); p.iframes = 0.15; return; }
     let d = amount;
-    if (st.block > 0 && s.rng() < st.block) {
+    const o = from || src;
+    // Cubriéndote con el escudo, todo lo que llega por delante queda bloqueado
+    const guarded = p.guard && o && Math.abs(angDiff(Math.atan2(o.y - p.y, o.x - p.x), p.aimAng)) < 1.3;
+    if (guarded || (st.block > 0 && s.rng() < st.block)) {
       d *= 0.25;
       addText(s, p.x, p.y - 0.75, 'Bloqueo', 'info');
       s.events.push({ type: 'block' });
@@ -1258,7 +1378,7 @@
         b.x += b.vx * h; b.y += b.vy * h; b.life -= h;
         if (b.life <= 0 || G.solidAt(m, b.x, b.y)) { b.dead = true; break; }
         const dx = p.x - b.x, dy = p.y - b.y, rr = p.r + b.r;
-        if (dx * dx + dy * dy < rr * rr && p.dashT <= 0) { damagePlayer(s, b.dmg, b.src); b.dead = true; break; }
+        if (dx * dx + dy * dy < rr * rr && p.dashT <= 0) { damagePlayer(s, b.dmg, b.src, false, { x: b.x - b.vx * 0.05, y: b.y - b.vy * 0.05 }); b.dead = true; break; }
       }
       if (s.over) return;
     }
@@ -1609,6 +1729,7 @@
         case 'relic': sc = 55; break;
         case 'tome': sc = 45; break;
         case 'potion': sc = p.potions < st.potionCap ? 30 : 0; break;
+        case 'pack': sc = 58; break;
       }
       if (sc > 0) out.push([sc, it]);
     }

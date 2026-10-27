@@ -26,7 +26,11 @@
     c.fillStyle = 'rgba(255,255,255,0.28)'; c.fillRect(x0, -w / 2, x1 - x0 - w * 1.2, w * 0.28);
   }
   const ICONS = {
-    fists(c, L) { c.fillStyle = '#d9c7a8'; c.beginPath(); c.arc(L * 0.5, 0, L * 0.45, 0, TAU); c.fill(); },
+    fists(c, L) {
+      c.fillStyle = '#d9c7a8'; c.beginPath(); c.arc(L * 0.5, 0, L * 0.45, 0, TAU); c.fill();
+      c.strokeStyle = 'rgba(90,60,40,0.45)'; c.lineWidth = Math.max(1, L * 0.06);
+      for (const y of [-0.22, 0, 0.22]) { c.beginPath(); c.moveTo(L * 0.62, y * L); c.lineTo(L * 0.9, y * L); c.stroke(); }
+    },
     dagger(c, L) { bar(c, 0, L * 0.3, L * 0.13, C.woodD); bar(c, L * 0.28, L * 0.34, L * 0.38, C.metalD); blade(c, L * 0.34, L, L * 0.16, C.metal); },
     sword(c, L) { bar(c, 0, L * 0.24, L * 0.09, C.woodD); c.fillStyle = C.metalD; c.beginPath(); c.arc(0, 0, L * 0.06, 0, TAU); c.fill(); bar(c, L * 0.22, L * 0.27, L * 0.34, C.metalD); blade(c, L * 0.27, L, L * 0.11, C.metal); },
     axe(c, L) {
@@ -84,7 +88,8 @@
     c.save();
     const f = G.ICON_LEN[icon] || 0.6, L = size * (0.55 + f * 0.45) * 1.05;
     if (icon === 'shield') { c.translate(size * 0.38, size * 0.5); G.drawWeapon(c, icon, size * 0.9, col); }
-    else if (icon === 'bow' || icon === 'recurve' || icon === 'fists') { c.translate(size * 0.32, size * 0.5); G.drawWeapon(c, icon, size * 0.85, col); }
+    else if (icon === 'fists') { c.translate(size * 0.2, size * 0.5); G.drawWeapon(c, icon, size * 0.6, col); }
+    else if (icon === 'bow' || icon === 'recurve') { c.translate(size * 0.32, size * 0.5); G.drawWeapon(c, icon, size * 0.85, col); }
     else { c.translate(size / 2 - Math.cos(-Math.PI / 4) * L / 2, size / 2 - Math.sin(-Math.PI / 4) * L / 2); c.rotate(-Math.PI / 4); G.drawWeapon(c, icon, L, col); }
     c.restore();
   };
@@ -233,6 +238,18 @@
     c.fillStyle = '#f4b860'; c.beginPath(); c.arc(-r * 0.15, -r * 0.12, r * 0.07, 0, TAU); c.arc(r * 0.15, -r * 0.12, r * 0.07, 0, TAU); c.fill();
     c.fillStyle = '#d9c7a8'; c.beginPath(); c.arc(r * 0.78, r * 0.25, r * 0.17, 0, TAU); c.fill();
   };
+  /* Paquete sorpresa: caja envuelta con lazo y una interrogación. */
+  G.drawPack = function (c, r) {
+    c.fillStyle = '#5a3a6e'; c.fillRect(-r * 0.8, -r * 0.45, r * 1.6, r * 1.15);
+    c.fillStyle = '#6e4a86'; c.fillRect(-r * 0.9, -r * 0.7, r * 1.8, r * 0.36);
+    c.fillStyle = '#f0c35a'; c.fillRect(-r * 0.12, -r * 0.7, r * 0.24, r * 1.4);
+    c.fillRect(-r * 0.8, -r * 0.08, r * 1.6, r * 0.18);
+    c.strokeStyle = '#f0c35a'; c.lineWidth = Math.max(1.5, r * 0.13);
+    c.beginPath(); c.ellipse(-r * 0.32, -r * 0.88, r * 0.3, r * 0.17, -0.5, 0, TAU); c.ellipse(r * 0.32, -r * 0.88, r * 0.3, r * 0.17, 0.5, 0, TAU); c.stroke();
+    c.fillStyle = '#ffe39a'; c.font = `800 ${Math.round(r * 0.75)}px 'Alegreya Sans', system-ui, sans-serif`;
+    c.textAlign = 'center'; c.textBaseline = 'middle'; c.fillText('?', r * 0.45, r * 0.32);
+  };
+
   /* Icono de cualquier artículo del mercado, centrado en el origen. */
   G.drawShopItem = function (c, it, r, t) {
     switch (it.cat) {
@@ -242,6 +259,7 @@
       case 'companion': G.drawCompanion(c, it.comp, r * (it.comp === 'hada' || it.comp === 'fatuo' ? 0.42 : it.comp === 'golem' ? 0.6 : 0.4), t || 0, 0); break;
       case 'potion': G.drawPotion(c, r * 0.75); break;
       case 'heal': G.drawHeal(c, r * 0.75); break;
+      case 'pack': G.drawPack(c, r * 0.8); break;
     }
   };
 
@@ -333,6 +351,9 @@
       dark.width = Math.ceil(R.W / 2); dark.height = Math.ceil(R.H / 2);
       R.S = G.clamp(Math.min(R.W, R.H) / 12.5, 30, 62) * R.zoom;
     };
+
+    /* Coordenadas de pantalla → mundo (para apuntar con el ratón). */
+    R.screenToWorld = (sx, sy) => ({ x: R.cam.x + (sx - R.W / 2) / R.S, y: R.cam.y + (sy - R.H / 2) / R.S });
 
     function light(c, x, y, r, a) {
       const g = c.createRadialGradient(x, y, 0, x, y, r);
@@ -632,7 +653,7 @@
       c.fillStyle = '#5e5468'; c.fillRect(x - S * 0.4, y - S * 0.04, S * 0.8, S * 0.1);
       if (it.sold) return;
       const fy = y - S * 0.32 + Math.sin(t * 2.2) * S * 0.04;
-      const glow = it.cat === 'weapon' ? G.RARITIES[it.w.rarity].color : it.cat === 'relic' ? G.RELIC_MAP[it.relic].color : it.cat === 'companion' ? G.COMPANIONS[it.comp].color : '#f4b860';
+      const glow = it.cat === 'weapon' ? G.RARITIES[it.w.rarity].color : it.cat === 'relic' ? G.RELIC_MAP[it.relic].color : it.cat === 'companion' ? G.COMPANIONS[it.comp].color : it.cat === 'pack' ? '#b98be8' : '#f4b860';
       const g = c.createRadialGradient(x, fy, 0, x, fy, S * 0.55);
       g.addColorStop(0, glow + '55'); g.addColorStop(1, glow + '00');
       c.fillStyle = g; c.beginPath(); c.arc(x, fy, S * 0.55, 0, TAU); c.fill();
@@ -692,10 +713,12 @@
           if (w.arc <= 40) push = Math.sin(prog * Math.PI) * S * 0.35;
           else { const half = Math.min(1.3, w.arc * Math.PI / 360); ang = p.aim[k] - half + half * 2 * (1 - Math.pow(1 - prog, 3)); }
         } else if (w && w.kind === 'ranged' && anim > 0) push = -Math.sin(prog * Math.PI) * S * 0.08;
-        const ha = f + side * 1.05;
+        else if (!w && anim > 0) push = Math.sin(prog * Math.PI) * S * 0.3;   // puñetazo
+        const guarding = p.guard && w && w.kind === 'shield';
+        const ha = guarding ? f + side * 0.3 : f + side * 1.05;
         const hx = x + Math.cos(ha) * r * 0.85 + Math.cos(ang) * push, hy = y + bob + Math.sin(ha) * r * 0.85 + Math.sin(ang) * push;
         c.save(); c.translate(hx, hy);
-        if (w && w.kind === 'shield') { c.rotate(f); c.translate(r * 0.15, 0); G.drawWeapon(c, 'shield', L, G.RARITIES[w.rarity].color); }
+        if (w && w.kind === 'shield') { c.rotate(f); c.translate(r * (guarding ? 0.55 : 0.15), 0); G.drawWeapon(c, 'shield', L * (guarding ? 1.25 : 1), G.RARITIES[w.rarity].color); }
         else if (w && (icon === 'bow' || icon === 'recurve' || icon === 'xbow' || icon === 'handxbow' || icon === 'staff' || icon === 'wand' || icon === 'sling' || icon === 'knives')) { c.rotate(anim > 0 ? p.aim[k] : f); G.drawWeapon(c, icon, L, G.RARITIES[w.rarity].color); }
         else { c.rotate(ang); G.drawWeapon(c, icon, L, w ? G.RARITIES[w.rarity].color : C.bone); }
         c.restore();
@@ -704,7 +727,7 @@
 
       // Arma detrás del cuerpo según hacia dónde mire
       const backSide = Math.sin(f) < 0 ? 1 : -1;
-      if (!two) { const kb = backSide === 1 ? 'R' : 'L'; if (hands[kb] || kb === 'R') drawHand(kb, backSide); }
+      if (!two) { const kb = backSide === 1 ? 'R' : 'L'; if (hands[kb] || kb === 'R' || p.anim[kb] > 0) drawHand(kb, backSide); }
       // Cuerpo: capa verdín con capucha
       c.fillStyle = p.hurtT > 0 ? '#e8826b' : '#3f8576';
       c.beginPath(); c.arc(x, y + bob, r, 0, TAU); c.fill();
@@ -713,7 +736,7 @@
       c.fillStyle = '#e2cfae'; c.beginPath(); c.arc(x + Math.cos(f) * r * 0.42, y + bob + Math.sin(f) * r * 0.42, r * 0.34, 0, TAU); c.fill();
       c.fillStyle = '#2a4f47'; c.beginPath(); c.arc(x + Math.cos(f) * r * 0.42 + Math.cos(f + 1.57) * r * 0.13, y + bob + Math.sin(f) * r * 0.42 + Math.sin(f + 1.57) * r * 0.13, r * 0.06, 0, TAU); c.arc(x + Math.cos(f) * r * 0.42 - Math.cos(f + 1.57) * r * 0.13, y + bob + Math.sin(f) * r * 0.42 - Math.sin(f + 1.57) * r * 0.13, r * 0.06, 0, TAU); c.fill();
       if (two) drawHand('B', 0.4);
-      else { const kf = backSide === 1 ? 'L' : 'R'; if (hands[kf] || (kf === 'R')) drawHand(kf, -backSide); }
+      else { const kf = backSide === 1 ? 'L' : 'R'; if (hands[kf] || kf === 'R' || p.anim[kf] > 0) drawHand(kf, -backSide); }
       c.globalAlpha = 1;
     }
 

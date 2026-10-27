@@ -66,6 +66,10 @@
     </div>
 
     <button id="btn-dash" class="touch-only" aria-label="Rodar">Rodar</button>
+    <div id="touch-attack">
+      <button id="atk-L" class="atk-btn" aria-label="Atacar con la mano izquierda"><canvas width="96" height="96" aria-hidden="true"></canvas><span>Izq.</span></button>
+      <button id="atk-R" class="atk-btn" aria-label="Atacar con la mano derecha"><canvas width="96" height="96" aria-hidden="true"></canvas><span>Der.</span></button>
+    </div>
   </div>
 
   <!-- ===================== Portada ===================== -->
@@ -123,6 +127,15 @@
     </div>
   </section>
 
+  <!-- ===================== Paquete sorpresa ===================== -->
+  <section id="pack" class="modal" hidden>
+    <div class="panel">
+      <h2>Paquete sorpresa</h2>
+      <p class="sub">Elige uno de estos tres objetos. Los otros dos se pierden.</p>
+      <div id="pack-cards" class="cards"></div>
+    </div>
+  </section>
+
   <!-- ===================== Pausa ===================== -->
   <section id="pause" class="modal" hidden>
     <div class="panel pause-panel">
@@ -131,6 +144,7 @@
         <div class="stack">
           <button id="p-resume" class="primary">Continuar</button>
           <label class="toggle"><input type="checkbox" id="p-sound"> Sonido</label>
+          <label class="toggle"><input type="checkbox" id="p-autoatk"> Ataque automático (las armas atacan solas al enemigo más cercano)</label>
           <label class="toggle" id="p-autoboons-row" hidden><input type="checkbox" id="p-autoboons"> Elegir mejoras solo con el piloto automático</label>
           <button id="p-help">Cómo se juega</button>
           <button id="p-quit" class="danger">Abandonar la partida</button>
@@ -164,7 +178,9 @@
           <h3>Controles</h3>
           <ul>
             <li><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> o flechas para moverte. En móvil, arrastra en la mitad izquierda.</li>
-            <li>Tus armas atacan solas al enemigo más cercano que esté a su alcance.</li>
+            <li>Apunta con el ratón. El clic izquierdo ataca con la mano izquierda y el derecho con la derecha; mantenlo pulsado para seguir atacando. Un arma a dos manos responde a los dos.</li>
+            <li>Si llevas escudo, mantén el clic de esa mano para cubrirte: bloqueas todo lo que te llegue por delante.</li>
+            <li>En móvil, los botones Izq. y Der. atacan apuntando solos al enemigo más cercano.</li>
             <li><kbd>Espacio</kbd> para rodar: eres invulnerable un instante.</li>
             <li><kbd>Q</kbd> y <kbd>E</kbd> equipan el arma del suelo en la mano izquierda o derecha. <kbd>X</kbd> la funde en oro.</li>
             <li><kbd>R</kbd> bebe una poción del cinturón.</li>
@@ -193,6 +209,7 @@
           <ul>
             <li>Los enemigos sueltan monedas, los cofres van llenos y cualquier arma del suelo se puede fundir en oro.</li>
             <li>Después de los pisos 2, 5, 7, 10… hay un mercado: armas, reliquias pasivas, pergaminos de mejora, compañeros y pociones.</li>
+            <li>El paquete sorpresa te deja elegir uno de tres objetos: un arma épica o legendaria, una reliquia, un pergamino o un compañero.</li>
             <li>El mercader renueva las mesas a cambio de oro. El oro se pierde al caer: gástalo.</li>
           </ul>
         </div>

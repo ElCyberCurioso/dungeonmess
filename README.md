@@ -4,16 +4,26 @@ Roguelike incremental de mazmorras para el navegador. Bajas piso a piso por una 
 
 No necesita compilación ni dependencias: es HTML, CSS y JavaScript plano, listo para GitHub Pages.
 
+## Novedades de la versión 0.3
+
+- **Ataque manual**: se apunta con el ratón; el clic izquierdo ataca con la mano izquierda y el derecho con la derecha (mantener pulsado repite el ataque al ritmo del arma). Un arma a dos manos responde a cualquiera de los dos clics y una mano vacía da puñetazos.
+- **Escudo activo**: mantener el clic de la mano del escudo te cubre y bloquea todo lo que llega por delante, a cambio de moverte más despacio.
+- **Sin menú del navegador**: dentro del juego el clic derecho ya no abre el menú contextual ni el clic central activa el desplazamiento.
+- **Móvil**: dos botones de ataque (Izq. y Der.) que apuntan solos al enemigo más cercano.
+- **Ataque automático opcional**: en la pausa se puede volver al ataque automático de antes. El piloto automático y el simulador siguen atacando solos.
+- **Paquete sorpresa** en el mercado: dos por mercado, cada uno más caro. Al abrirlo eliges uno de tres objetos de categorías distintas (arma épica o legendaria, reliquia, pergamino o compañero).
+
 ## Novedades de la versión 0.2
 
 - **Oro**: los enemigos sueltan monedas (las élites y los jefes, más), cada piso puede tener cofres y cualquier arma del suelo se puede **fundir** en oro. El oro dura solo la partida: al caer se pierde.
-- **Mercados entre pisos**: después de los pisos 2, 5, 7, 10, 12, 15… hay un piso seguro con un mercader y nueve mesas:
+- **Mercados entre pisos**: después de los pisos 2, 5, 7, 10, 12, 15… hay un piso seguro con un mercader y varias mesas:
   - 3 armas (siempre raras o mejores).
   - 2 **reliquias**: habilidades pasivas para toda la partida (12 distintas: Corona de brasas, Cáliz de sangre, Guanteletes gemelos, Cinturón del gigante, Ojo del cuervo…). Cada reliquia que tienes encarece la siguiente.
   - 1 **pergamino** con una mejora de nivel concreta.
   - 1 **compañero**: Lobo espectral, Fuego fatuo, Gólem de bronce u Hada sanadora. Son espíritus que no mueren; comprar otra vez el mismo sube su nivel (hasta 5).
   - **Pociones** para el cinturón y una **Bendición** que cura toda la vida.
   - El mercader **renueva las mesas** a cambio de oro (cada vez más caro).
+  - Desde la 0.3, un **paquete sorpresa** (ver arriba).
 - **Cinturón de pociones**: las pociones se guardan y se beben cuando quieras (tecla R o botón).
 - **Nueva rama del árbol, Comercio**: Bolsa heredada (oro inicial), Regateo (descuento), Saqueador (más oro), Cinturón (más pociones), Lazos (compañeros más fuertes) y Manada (más compañeros a la vez).
 - **Atajo** ahora empieza la partida en un mercado con oro para equiparte antes de bajar.
@@ -42,15 +52,18 @@ No necesita compilación ni dependencias: es HTML, CSS y JavaScript plano, listo
 | Acción | Teclado | Móvil |
 | --- | --- | --- |
 | Moverse | WASD o flechas | Arrastrar en la mitad izquierda |
-| Atacar | Automático | Automático |
+| Apuntar | Ratón | Automático (al enemigo más cercano) |
+| Atacar con la mano izquierda / derecha | Clic izquierdo / clic derecho (mantener para repetir) | Botones «Izq.» y «Der.» |
+| Cubrirse con el escudo | Mantener el clic de la mano del escudo | Mantener su botón |
 | Rodar (invulnerable un instante) | Espacio | Botón «Rodar» |
 | Equipar arma del suelo | Q (izquierda), E (derecha o dos manos) | Botones de la ficha |
 | Fundir arma del suelo en oro | X | Botón «Fundir» |
 | Comprar en el mercado / renovar mesas | E (Q para la mano izquierda en armas) | Botones de la ficha |
+| Elegir objeto del paquete sorpresa | 1, 2, 3 o clic | Tocar la carta |
 | Beber poción | R | Botón del cinturón |
 | Bajar escaleras | F | Botón «Bajar al…» |
 | Piloto automático | T | Botón «Auto» |
-| Pausa | Esc o P | Botón «Pausa» |
+| Pausa (y ajuste de ataque automático) | Esc o P | Botón «Pausa» |
 
 ## Publicarlo en GitHub Pages
 

@@ -63,7 +63,9 @@
     G.Audio.unlock();
     const opts = G.startFloorOptions(meta);
     const sf = opts.includes(meta.settings.startFloor) ? meta.settings.startFloor : 1;
-    run = G.newRun(meta, { startFloor: sf, autopilot: autopilotUnlocked() && meta.settings.auto });
+    run = G.newRun(meta, { startFloor: sf, autopilot: autopilotUnlocked() && meta.settings.auto, manual: !meta.settings.autoAttack });
+    run.input.assist = isTouch && !mouseSeen;
+    fire.L = fire.R = false;
     mode = 'run';
     ['title', 'tree', 'death', 'pause', 'levelup', 'help'].forEach(id => show(id, false));
     show('hud', true);
@@ -75,7 +77,7 @@
   }
   /* Q y E: equipar o comprar en la mano izquierda/derecha; E también compra y renueva el mercado. */
   function interact(slot) {
-    if (!run || !run.near || run.over || run.choices || run.paused) return;
+    if (!run || !run.near || run.over || run.choices || run.pack || run.paused) return;
     const it = run.near;
     let ok = false;
     if (it.kind === 'weapon') ok = G.equip(run, it.id, it.w.hands === 2 ? 'B' : slot);
@@ -106,6 +108,7 @@
     show('pause', v);
     if (v) {
       $('p-sound').checked = meta.settings.sound;
+      $('p-autoatk').checked = !!meta.settings.autoAttack;
       $('p-autoboons').checked = meta.settings.autoBoons;
       show('p-autoboons-row', autopilotUnlocked());
       buildInventory();
@@ -133,7 +136,7 @@
         case 'floor': {
           let sub = `Amenaza ×${fmtMult(G.threat(ev.floor))}`;
           if (ev.floor % 5 === 0) sub = 'Un guardián custodia las escaleras';
-          else if (meta.runs === 0 && ev.floor === 1) sub = isTouch ? 'Arrastra en la mitad izquierda para moverte. Tus armas atacan solas.' : 'Muévete con WASD. Tus armas atacan solas.';
+          else if (meta.runs === 0 && ev.floor === 1) sub = meta.settings.autoAttack ? 'Muévete con WASD o arrastrando. Tus armas atacan solas.' : isTouch && !mouseSeen ? 'Arrastra en la mitad izquierda para moverte y usa los botones Izq. y Der. para atacar.' : 'Muévete con WASD. Apunta con el ratón: clic izquierdo y derecho atacan con cada mano.';
           showToast(`Piso ${ev.floor}`, sub);
           break;
         }
@@ -225,7 +228,7 @@
     }
 
     // Manos
-    const sig = handSig(p) + '|' + p.lvl + '|' + s.floor;
+    const sig = handSig(p) + '|' + p.lvl + '|' + s.floor + '|' + (s.manual && !s.autopilot ? 'man' : 'auto') + (mouseSeen ? 'm' : 't');
     if (sig !== hudCache.handsSig) { hudCache.handsSig = sig; buildHands(); }
     for (const [k, w] of G.attackSlots(p)) {
       const el = handEls[k];
@@ -256,6 +259,13 @@
     // Subida de nivel
     if (s.choices && !(s.autopilot && meta.settings.autoBoons) && !s.over) openLevelup();
     else if (!$('levelup').hidden) show('levelup', false);
+    // Paquete sorpresa abierto
+    if (s.pack && !s.choices && !(s.autopilot && meta.settings.autoBoons) && !s.over) openPack();
+    else if (!$('pack').hidden) show('pack', false);
+    // Cursor de mira y modo de ataque
+    const aiming = s.manual && !s.autopilot && !s.over;
+    document.body.classList.toggle('aiming', aiming);
+    document.body.classList.toggle('autoatk', !s.manual || !!s.autopilot);
   }
 
   function handSig(p) { const h = p.hands; return (h.L ? h.L.uid : 0) + ':' + (h.R ? h.R.uid : 0); }
@@ -282,7 +292,7 @@
       if (w) name.style.color = G.RARITIES[w.rarity].color;
       const m = document.createElement('div'); m.className = 'h-meta';
       if (!w) m.textContent = label;
-      else if (w.kind === 'shield') m.textContent = `${label}, bloquea ${Math.round(w.block * 100)}%`;
+      else if (w.kind === 'shield') m.textContent = s.manual && !s.autopilot ? `${label}: cubrirse` : `${label}, bloquea ${Math.round(w.block * 100)}%`;
       else m.textContent = `${label}, ${fmt(G.weaponDps(s, w, s.stats.dualActive && !two))} daño/s`;
       d.append(name, m);
       if (w && w.kind !== 'shield') {
@@ -292,8 +302,21 @@
       }
       el.append(d);
     };
-    if (two) slot('B', h.L, 'A dos manos');
-    else { slot('L', h.L, 'Izquierda'); slot('R', h.R, 'Derecha'); }
+    const manual = s.manual && !s.autopilot, mouse = !(isTouch && !mouseSeen);
+    const lab = k => {
+      if (!manual) return k === 'B' ? 'A dos manos' : k === 'L' ? 'Izquierda' : 'Derecha';
+      if (!mouse) return k === 'B' ? 'A dos manos' : k === 'L' ? 'Botón Izq.' : 'Botón Der.';
+      return k === 'B' ? 'Cualquier clic' : k === 'L' ? 'Clic izquierdo' : 'Clic derecho';
+    };
+    if (two) slot('B', h.L, lab('B'));
+    else { slot('L', h.L, lab('L')); slot('R', h.R, lab('R')); }
+    // Iconos de los botones táctiles de ataque
+    for (const k of ['L', 'R']) {
+      const cv = $('atk-' + k).querySelector('canvas'), c = cv.getContext('2d');
+      c.setTransform(1, 0, 0, 1, 0, 0); c.clearRect(0, 0, cv.width, cv.height);
+      const w = two ? h.L : h[k];
+      G.drawWeaponIcon(c, w ? w.icon : 'fists', cv.width, w ? G.RARITIES[w.rarity].color : '#e9dfc8');
+    }
   }
 
   /* Lienzo con un icono dibujado por fn(c, r) centrado. */
@@ -341,11 +364,22 @@
     card.append(acts);
   }
 
-  function buildShopCard(it) {
-    const s = run, p = s.player, st = s.stats, card = $('pickup'); card.innerHTML = '';
-    const icon = drawnCanvas(52, (c, r) => G.drawShopItem(c, it, r, 0));
+  /* Textos de un objeto del mercado o de un paquete. */
+  function itemInfo(it) {
+    const s = run, p = s.player, st = s.stats;
     let name = '', sub = '', desc = '', note = '', label = 'Comprar', color = '#f4b860';
-    if (it.cat === 'relic') {
+    if (it.cat === 'weapon') {
+      const w = it.w, RR = G.RARITIES[w.rarity];
+      name = w.name; color = RR.color;
+      sub = w.kind === 'shield' ? `${RR.name}, escudo de una mano` : `${RR.name}, ${G.KIND_LABEL[w.kind]}, ${w.hands === 2 ? 'a dos manos' : 'a una mano'}`;
+      if (w.kind === 'shield') desc = G.weaponTraits(w).join('. ') + '.';
+      else {
+        const perHit = w.dmg * st.dmg * (w.kind === 'melee' ? st.melee : st.ranged) * (w.hands === 2 ? st.twoHand : 1);
+        const tr = G.weaponTraits(w).slice(0, 2);
+        desc = `${fmt(perHit)} de daño, ${G.dec(st.atkSpd / w.cd, 1)} ataques/s.` + (tr.length ? ' ' + tr.join('. ') + '.' : '');
+      }
+      note = 'Queda a tus pies para que elijas en qué mano llevarla.';
+    } else if (it.cat === 'relic') {
       const R = G.RELIC_MAP[it.relic]; name = R.name; sub = 'Reliquia pasiva, dura toda la partida'; desc = R.desc; color = R.color;
     } else if (it.cat === 'tome') {
       const B = G.BOON_MAP[it.boon], have = p.boons[it.boon] || 0;
@@ -363,7 +397,18 @@
       note = `Quedan ${it.stock}. Llevas ${p.potions} de ${st.potionCap}.`; color = '#d9533c';
     } else if (it.cat === 'heal') {
       name = 'Bendición'; sub = 'Efecto inmediato'; desc = 'Recupera toda la vida ahora mismo.'; color = '#e86a58';
+    } else if (it.cat === 'pack') {
+      name = 'Paquete sorpresa'; sub = 'Elige 1 de 3 objetos al abrirlo'; color = '#b98be8'; label = 'Comprar y abrir';
+      desc = 'Trae tres cosas distintas entre un arma épica o legendaria, una reliquia, un pergamino y un compañero. Te quedas con una.';
+      note = `Quedan ${it.stock}. Cada paquete que abres encarece el siguiente.`;
     }
+    return { name, sub, desc, note, label, color };
+  }
+
+  function buildShopCard(it) {
+    const s = run, card = $('pickup'); card.innerHTML = '';
+    const icon = drawnCanvas(52, (c, r) => G.drawShopItem(c, it, r, 0));
+    const { name, sub, desc, note, label, color } = itemInfo(it);
     cardHead(card, icon, name, sub, color);
     card.append(el('p', 'pk-desc', desc));
     if (note) card.append(el('p', 'pk-note', note));
@@ -458,6 +503,39 @@
     const boons = Object.entries(p.boons);
     if (!boons.length) box.append(el('p', 'empty-line', 'Ninguna todavía.'));
     else { const bl = el('div', 'boon-list'); for (const [id, n] of boons) bl.append(el('span', null, n > 1 ? `${G.BOON_MAP[id].name} ×${n}` : G.BOON_MAP[id].name)); box.append(bl); }
+  }
+
+  /* =================== Paquete sorpresa =================== */
+  let packKey = null;
+  function openPack() {
+    const s = run;
+    if (packKey === s.pack && !$('pack').hidden) return;
+    packKey = s.pack;
+    const box = $('pack-cards'); box.innerHTML = '';
+    s.pack.options.forEach((o, i) => {
+      const info = itemInfo(o);
+      const card = el('button', 'card');
+      card.style.borderTopColor = info.color;
+      const top = el('span'); top.style.display = 'flex'; top.style.alignItems = 'center'; top.style.gap = '10px';
+      top.append(el('kbd', null, String(i + 1)), drawnCanvas(56, (c, r) => G.drawShopItem(c, o, r, 0)));
+      const n = el('span', 'c-name', info.name); n.style.color = info.color;
+      card.append(top, n, el('span', 'c-sub', info.sub), el('span', 'c-desc', info.desc));
+      if (o.cat === 'companion') {
+        const out = G.compReplaced(s, o.comp), own = G.ownComp(s, o.comp);
+        card.append(el('span', 'c-note', own ? `Sube a nivel ${own.lvl + 1}.` : out ? `Sustituye a ${out.d.name} (nivel ${out.lvl}).` : 'No puede morir.'));
+      } else if (o.cat === 'weapon') card.append(el('span', 'c-note', 'Queda a tus pies para elegir mano.'));
+      else if (o.cat === 'tome') { const have = s.player.boons[o.boon] || 0; card.append(el('span', 'c-note', have ? `Ya tienes ${have}.` : 'Aún no la tienes.')); }
+      card.addEventListener('click', () => pickPack(i));
+      box.append(card);
+    });
+    show('pack', true);
+  }
+  function pickPack(i) {
+    if (!run || !run.pack) return;
+    G.choosePack(run, i);
+    G.Audio.play('buy');
+    packKey = null;
+    show('pack', false);
   }
 
   /* =================== Subida de nivel =================== */
@@ -712,12 +790,17 @@
 
   /* =================== Controles =================== */
   const keys = new Set();
-  const modalOpen = () => !$('levelup').hidden || !$('pause').hidden || !$('help').hidden || !$('death').hidden;
+  const modalOpen = () => !$('levelup').hidden || !$('pack').hidden || !$('pause').hidden || !$('help').hidden || !$('death').hidden;
   window.addEventListener('keydown', e => {
     const k = e.key.toLowerCase();
     if (mode === 'run' && run) {
       if (['arrowup', 'arrowdown', 'arrowleft', 'arrowright', ' '].includes(k) && !modalOpen()) e.preventDefault();
       if (!$('help').hidden) { if (k === 'escape') show('help', false); return; }
+      if (!$('pack').hidden) {
+        const i = ['1', '2', '3'].indexOf(k);
+        if (i >= 0 && run.pack) pickPack(i);
+        return;
+      }
       if (!$('levelup').hidden) {
         const i = ['1', '2', '3'].indexOf(k);
         if (i >= 0 && run.choices && run.choices[i]) pickBoon(run.choices[i]);
@@ -741,14 +824,58 @@
   window.addEventListener('keyup', e => keys.delete(e.key.toLowerCase()));
   window.addEventListener('blur', () => keys.clear());
 
-  // Joystick virtual (también funciona arrastrando con el ratón)
+  /* ---------- Ratón ----------
+     Clic izquierdo → mano izquierda, clic derecho → mano derecha. Se apunta al puntero.
+     Dentro del juego no se abre el menú contextual ni el desplazamiento del clic central. */
+  const fire = { L: false, R: false };
+  let mouseX = window.innerWidth / 2, mouseY = window.innerHeight / 2, mouseSeen = false;
+  function syncButtons(e) {
+    fire.L = (e.buttons & 1) !== 0;
+    fire.R = (e.buttons & 2) !== 0;
+  }
+  function onGame(e) { return mode === 'run' && run && !run.over && !run.paused && !modalOpen(); }
+  const tzEl = $('touch-zone');
+  tzEl.addEventListener('mousedown', e => {
+    mouseSeen = true; mouseX = e.clientX; mouseY = e.clientY;
+    if (run) run.input.assist = false;
+    if (e.button === 1 || e.button === 2) e.preventDefault();
+    if (!onGame()) return;
+    G.Audio.unlock();
+    syncButtons(e);
+  });
+  window.addEventListener('mousemove', e => {
+    mouseX = e.clientX; mouseY = e.clientY;
+    if (!mouseSeen) { mouseSeen = true; if (run) { run.input.assist = false; hudCache.handsSig = ''; } }
+    if (fire.L || fire.R) syncButtons(e);
+  });
+  window.addEventListener('mouseup', e => syncButtons(e));
+  window.addEventListener('blur', () => { fire.L = fire.R = false; });
+  document.addEventListener('contextmenu', e => e.preventDefault());
+  document.addEventListener('mousedown', e => { if (e.button === 1) e.preventDefault(); });   // sin autodesplazamiento
+  document.addEventListener('auxclick', e => e.preventDefault());
+  document.addEventListener('dragstart', e => e.preventDefault());
+  document.addEventListener('selectstart', e => { if (!(e.target instanceof HTMLInputElement)) e.preventDefault(); });
+
+  /* Botones táctiles de ataque (con apuntado asistido) */
+  for (const k of ['L', 'R']) {
+    const b = $('atk-' + k);
+    const down = e => { e.preventDefault(); G.Audio.unlock(); fire[k] = true; b.classList.add('held'); if (run) run.input.assist = true; try { b.setPointerCapture(e.pointerId); } catch (err) { /* sin captura */ } };
+    const up = () => { fire[k] = false; b.classList.remove('held'); };
+    b.addEventListener('pointerdown', down);
+    b.addEventListener('pointerup', up);
+    b.addEventListener('pointercancel', up);
+    b.addEventListener('lostpointercapture', up);
+  }
+
+  // Joystick virtual (solo pantallas táctiles: con ratón se usa el teclado para moverse)
   let joy = null;
   const tz = $('touch-zone'), joyEl = $('joystick'), knob = joyEl.querySelector('.knob');
   const JR = 56;
   tz.addEventListener('pointerdown', e => {
     if (mode !== 'run' || !run || run.over || run.paused) return;
     G.Audio.unlock();
-    if (e.pointerType !== 'mouse' && e.clientX > window.innerWidth * 0.62) return;
+    if (e.pointerType === 'mouse') return;
+    if (e.clientX > window.innerWidth * 0.62) return;
     joy = { id: e.pointerId, x0: e.clientX, y0: e.clientY, vx: 0, vy: 0 };
     try { tz.setPointerCapture(e.pointerId); } catch (err) { /* sin captura */ }
     joyEl.style.left = e.clientX + 'px'; joyEl.style.top = e.clientY + 'px';
@@ -799,6 +926,10 @@
   on('p-help', () => show('help', true));
   on('p-quit', () => { if (run && !run.over) { show('pause', false); run.paused = false; G.abandon(run); } });
   $('p-sound').addEventListener('change', e => { meta.settings.sound = e.target.checked; G.Audio.setEnabled(meta.settings.sound); save(); });
+  $('p-autoatk').addEventListener('change', e => {
+    meta.settings.autoAttack = e.target.checked; save();
+    if (run) { run.manual = !meta.settings.autoAttack; hudCache.handsSig = ''; }
+  });
   $('p-autoboons').addEventListener('change', e => { meta.settings.autoBoons = e.target.checked; save(); });
   on('lu-auto', () => { if (run && run.choices) pickBoon(G.autoBoonPick(run)); });
   on('d-again', startRun);
@@ -819,6 +950,11 @@
     if (mode === 'run' && run) {
       const mv = readMove();
       run.input.mx = mv[0]; run.input.my = mv[1];
+      const wp = R.screenToWorld(mouseX, mouseY);
+      run.input.aimX = wp.x; run.input.aimY = wp.y;
+      run.input.mouse = mouseSeen && !run.input.assist;
+      const live = !modalOpen();
+      run.input.fire.L = fire.L && live; run.input.fire.R = fire.R && live;
       acc += dt;
       let n = 0;
       while (acc >= DT && n < 5) { G.step(run, DT); acc -= DT; n++; }

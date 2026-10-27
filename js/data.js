@@ -6,7 +6,7 @@
    ========================================================================= */
 window.G = window.G || {};
 (function (G) {
-  G.VERSION = '0.2.0';
+  G.VERSION = '0.3.0';
   G.SAVE_KEY = 'dungeonmess.save.v1';
   G.OLD_SAVE_KEYS = ['descenso.save.v1'];   // nombre anterior del juego: se migra al cargar
 
@@ -188,6 +188,7 @@ window.G = window.G || {};
   /* ---------- Mercado ---------- */
   G.SHOP = {
     potion: 22, heal: 35, tome: 55, reroll: 15,   // precios base (×econ)
+    pack: 95, packGrowth: 0.35, packStock: 2,      // paquete sorpresa: precio base, subida por cada uno comprado y existencias
     potionStock: 3,
     rarityPrice: [1, 1.8, 3.2, 5.5],              // multiplicador del precio de un arma por rareza
     meltRarity: [0.25, 0.4, 0.65, 1],             // fracción del precio base que da fundir, por rareza

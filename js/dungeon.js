@@ -81,22 +81,24 @@
   };
 
   /* Mercado: una sala amplia con el mercader arriba, nueve mesas en rejilla
-     (armas, reliquias y pergamino, compañero y pociones) y las escaleras a la derecha. */
+     (armas, reliquias y pergamino, compañero y pociones), el paquete sorpresa
+     a la derecha y las escaleras al fondo. */
   G.genShop = function () {
-    const W = 23, H = 15, m = makeMap(W, H);
+    const W = 26, H = 15, m = makeMap(W, H);
     for (let y = 1; y < H - 1; y++) for (let x = 1; x < W - 1; x++) m.tiles[y * W + x] = FLOOR;
-    for (const [x, y] of [[3, 2], [19, 2], [3, 12], [19, 12]]) m.tiles[y * W + x] = WALL;  // columnas
-    const room = { x: 1, y: 1, w: W - 2, h: H - 2, cx: 11, cy: 7 };
+    for (const [x, y] of [[3, 2], [22, 2], [3, 12], [22, 12]]) m.tiles[y * W + x] = WALL;  // columnas
+    const room = { x: 1, y: 1, w: W - 2, h: H - 2, cx: 13, cy: 7 };
     m.rooms.push(room);
     m.startRoom = m.stairsRoom = room;
-    m.start = { x: 2, y: 7 }; m.stairs = { x: 20, y: 7 };
-    m.merchant = { x: 11.5, y: 2.1 };
-    m.rug = { x0: 5.4, y0: 3.3, x1: 17.6, y1: 11.9 };
+    m.start = { x: 2, y: 7 }; m.stairs = { x: 23, y: 7 };
+    m.merchant = { x: 13.5, y: 2.1 };
+    m.rug = { x0: 5.4, y0: 3.3, x1: 21.6, y1: 11.9 };
     const cols = [7.5, 11.5, 15.5];
     m.slots = [
       ['weapon', cols[0], 4.6], ['weapon', cols[1], 4.6], ['weapon', cols[2], 4.6],
       ['relic', cols[0], 7.6], ['relic', cols[1], 7.6], ['tome', cols[2], 7.6],
       ['companion', cols[0], 10.6], ['potion', cols[1], 10.6], ['heal', cols[2], 10.6],
+      ['pack', 19.5, 7.6],
     ];
     m.isShop = true;
     m.seen.fill(1); m.vis.fill(1);
